@@ -1,0 +1,101 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>The Best App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-GLhlTQ8iRABdZLl6O3oVMWSktQOp6b7In1Zl3/Jr59b6EGGoI1aFkw7cmDA6j6gD" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js" integrity="sha384-w76AqPfDkMBDXo30jS1Sgez6pr3x5MlQ1ZAGC+nuZB+EYdgRZgiwxhTBTkF7CXvN" crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="px-4 pt-5 my-5 text-center">
+        <h1 class="display-4 fw-bold">The Best App ever!</h1>
+
+        <div class="col-lg-6 pt-4 mx-auto">
+            <p class="lead mb-4">Хочешь узнать лучшие курсы валют? Жми волшебную кнопку внизу</p>
+            <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mb-3">
+                <select id="currency" class="form-select-lg px-4">
+                    <option selected>Currency..</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="CNY">CNY</option>
+                    <option value="BTC">BTC</option>
+                </select>
+
+                <button id="goButton" type="button" class="btn btn-primary btn-lg px-4">Get price</button>
+            </div>
+            <div id="alert" class="alert alert-danger alert-dismissible fade hide" role="alert">
+                placeholder for alert
+            </div>
+        </div>
+
+        <div class="col-lg-6 pt-1 mx-auto">
+            <table id="dataTable" class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Время</th>
+                        <th scope="col">Валюта</th>
+                        <th scope="col">Цена покупки</th>
+                        <th scope="col">Цена продажи</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script>
+        const backendUrl = `http://localhost:8000/api`;
+        const formatter = new Intl.NumberFormat('ru-RU', {
+            style: 'currency',
+            currency: 'RUB',
+            minimumFractionDigits: 4
+        });
+
+        const goButton = document.getElementById('goButton');
+        const currency = document.getElementById('currency');
+        const alert = document.getElementById('alert');
+        const dataTable = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
+        goButton.addEventListener('click', () => {
+            var url;
+            if (currency.value === 'Currency..') {
+                url = backendUrl;
+            } else {
+                url = `${backendUrl}?currency=${currency.value}`;
+            }
+            fetch(url, {cache: 'no-cache'})
+                .then(response => response.json())
+                .then(data => {
+                    dataTable.innerHTML = '';
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        const date = document.createElement('td');
+                        const symbol = document.createElement('td');
+                        const bid = document.createElement('td');
+                        const ask = document.createElement('td');
+                        const dateObj = new Date(item.time + 'Z');
+                        date.innerText = dateObj.toLocaleString();
+                        symbol.innerText = item.fromCurrency;
+                        bid.innerText = formatter.format(item.bid);
+                        ask.innerText = formatter.format(item.ask);
+                        row.appendChild(date);
+                        row.appendChild(symbol);
+                        row.appendChild(bid);
+                        row.appendChild(ask);
+                        dataTable.appendChild(row);
+                    })
+                })
+                .catch((error) => {
+                    alert.innerText = 'Unexpected error: ' + error;
+                    alert.classList.remove('hide');
+                    alert.classList.add('show');
+                    console.error('There has been a problem with your fetch operation:', error);
+                    setTimeout(() => {
+                        alert.classList.remove('show');
+                        alert.classList.add('hide');
+                    }, 5000);
+                });
+        });
+    </script>
+</body>
+</html>
