@@ -12,13 +12,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ForkJoinPool;
-import java.util.regex.Pattern;
 
 /**
  * This is a simple example of a backend server that provides currency exchange rates.
@@ -125,48 +124,117 @@ public class MySuperBackend {
                     .toString();
             var request = HttpRequest.newBuilder(new URI(url)).GET().build();
             var response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-            var values = new Parser().parseJsonData(response.body());
-            return new CurrencyData(values.get("time"),
-                    values.get("fromCurrency"),
-                    values.get("toCurrency"),
-                    values.get("bid"),
-                    values.get("ask"));
+            var values = (Map<String,Object>) new JsonParser(response.body()).parseToMap().get("Realtime Currency Exchange Rate");
+            return new CurrencyData(values.get("6. Last Refreshed").toString(),
+                    values.get("1. From_Currency Code").toString(),
+                    values.get("3. To_Currency Code").toString(),
+                    values.get("8. Bid Price").toString(),
+                    values.get("9. Ask Price").toString());
         }
     }
 
     /**
-     * Ugly JSON parser.
+     * Simple JSON parser.
      */
-    private static class Parser {
-        private static final Pattern PATTERN = Pattern.compile("(\\\".*\\\")");
+    private static class JsonParser {
+        private int pointer;
+        private final String data;
 
-        public Map<String, String> parseJsonData(String data) {
-            var split = Arrays.stream(data.split("\n"))
-                    .map(s -> s.split("\":"))
-                    .filter(arr -> arr.length >= 2)
-                    .flatMap(Arrays::stream)
-                    .toArray(String[]::new);
-            var values = new HashMap<String, String>();
-            for (int i=0; i<split.length; i=i+2) {
-                switch (split[i].trim()) {
-                    case "\"6. Last Refreshed" -> values.put("time", extractValueFromBrackets(split[i+1]));
-                    case "\"7. Time Zone" -> values.put("timeZone", extractValueFromBrackets(split[i+1]));
-                    case "\"1. From_Currency Code" -> values.put("fromCurrency", extractValueFromBrackets(split[i+1]));
-                    case "\"3. To_Currency Code" -> values.put("toCurrency", extractValueFromBrackets(split[i+1]));
-                    case "\"8. Bid Price" -> values.put("bid", extractValueFromBrackets(split[i+1].trim()));
-                    case "\"9. Ask Price" -> values.put("ask", extractValueFromBrackets(split[i+1].trim()));
-                }
-            }
-            return values;
+        public JsonParser(String data) {
+            this.data = data;
+            this.pointer = 0;
         }
 
-        private String extractValueFromBrackets(String data) {
-            var matcher = PATTERN.matcher(data);
-            if (matcher.find()) {
-                return matcher.group(0).substring(1, matcher.group(0).length()-1);
-            } else {
-                return "";
+        public Map<String, Object> parseToMap() {
+            var map = new HashMap<String, Object>();
+
+            parseObject:
+            while (pointer < data.length()) {
+                switch (data.charAt(pointer)) {
+                    case '{', ',' -> {
+                        var key = parseString();
+                        var value = parseValue();
+                        map.put(key, value);
+                    }
+                    case '}' -> {
+                        pointer++;
+                        break parseObject;
+                    }
+                    default -> pointer++;
+                }
             }
+            return map;
+        }
+
+        public List<Object> parseToList() {
+            var list = new ArrayList<Object>();
+
+            parseArray:
+            while (pointer < data.length()) {
+                switch (data.charAt(pointer)) {
+                    case '[', ',' -> {
+                        pointer++;
+                        list.add(parseValue());
+                    }
+                    case ']' -> {
+                        pointer++;
+                        break parseArray;
+                    }
+                    default -> pointer++;
+                }
+            }
+            return list;
+        }
+
+        private String parseString() {
+            String result = "";
+            while (pointer < data.length()) {
+                if (data.charAt(pointer) == '"') {
+                    pointer++;
+                    int start = pointer;
+                    while (pointer < data.length() && data.charAt(pointer) != '"') {
+                        pointer++;
+                    }
+                    result = data.substring(start, pointer);
+                    pointer++;
+                    break;
+                } else {
+                    pointer++;
+                }
+            }
+            return result;
+        }
+
+        public Object parseValue() {
+            while (pointer < data.length()) {
+                switch (data.charAt(pointer)) {
+                    case '{' -> {
+                        return parseToMap();
+                    }
+                    case '[' -> {
+                        return parseToList();
+                    }
+                    case '"' -> {
+                        return parseString();
+                    }
+                    default -> {
+                        if (Character.isDigit(data.charAt(pointer))) {
+                            return parseNumber();
+                        } else {
+                            pointer++;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        private Number parseNumber() {
+            int start = pointer;
+            while (pointer < data.length() && Character.isDigit(data.charAt(pointer))) {
+                pointer++;
+            }
+            return Integer.parseInt(data.substring(start, pointer));
         }
     }
 
